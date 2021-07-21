@@ -462,7 +462,7 @@ div.tocify {
 <h2>2010s</h2>
 <div id="initial-loading-and-cleaning" class="section level3">
 <h3>Initial Loading and Cleaning</h3>
-<p>In order to construct board networks from 2010 on, we need data from Amazon Web Services that contains the board information from Forms 990/Forms 990EZ filers across the United States from 2010 to 2017. We will then need to match this board data to a set of all active nonprofits in Texas between 2013 and 2016 to a subset of organizations.</p>
+<p>In order to construct board networks from 2010 on, we need data from Amazon Web Services that contains the board information from Forms 990/Forms 990EZ filers across the United States from 2010 to 2017. We will then need to match this board data to a set of all active nonprofits in Texas between 2013 and 2016.</p>
 <p>Both of these data files can be accessed with some work AWS via <a href="http://www.irsx.info/metadata/forms.html">IRSx</a>. There, you can find guides for how to constructing the appropriate information. A special shout out to <a href="https://publicservice.asu.edu/content/jesse-lecy">Jesse Lecy</a> was also very kind in providing me with the board information from AWS.</p>
 <div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">setwd</span>(<span class="st">&#39;/Users/Wolfalev/Documents/Grad/UT-AUSTIN GRAD/Articles and Projects/4. Nonprofit Interlock/GitHub/DATA/&#39;</span>)</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>board_data <span class="ot">&lt;-</span> <span class="fu">readRDS</span>(<span class="st">&quot;FULL-PART-VII-TABLE-01.rds&quot;</span>) <span class="co">#Board Data from AWS </span></span>
