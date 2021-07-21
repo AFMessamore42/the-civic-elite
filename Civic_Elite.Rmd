@@ -1,0 +1,377 @@
+---
+title: "Understanding 'The Civic Elite' in Austin, TX"
+knit: (function(input_file, encoding) {
+  out_dir <- 'docs';
+  rmarkdown::render(input_file,
+ encoding=encoding,
+ output_file=file.path(dirname(input_file), out_dir, 'index.html'))})
+author: "By: Andrew Messamore"
+date: "7/17/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+
+In this [R Markdown](http://rmarkdown.rstudio.com) Notebook, I go through the steps of how to construct the focal network summaries used in [The Civic Elite](https://www.sciencedirect.com/science/article/pii/S0378873321000216?casa_token=15897H9VZq8AAAAA:rLqOJqDmJseK__EYMrPCc_r-uTmrz964F3a7WAxiygjLrIz2q-p_r7yTwuQUIzlZdnyyanoAQPzW). This replication file covers the analysis of the longitudinal Austin network (1998-2016). The goal of this analysis is to show how to code the analysis and produce similar results in other cities. The same file can be used to produce the results for Cleveland if the Austin data files are exchanged for the Cleveland data files. The construction the networks from the raw data is covered in Data Construction files. This file is not meant to be primer on the network measures used, though, and only briefly describe the tools. For more on the calculation of these statistics and detailed references to the source material, please see the manuscript. 
+
+
+This file relies on [brainGraph 2.7.3](https://cran.r-project.org/src/contrib/Archive/brainGraph/) for the construction of the Rich-Club Coefficients, so be sure to use this version of brainGraph in order to ensure that functionality remains the same as brainGraph has been updated since the analysis was undertaken. Instructions for installing older versions of R packages can be found [here](https://support.rstudio.com/hc/en-us/articles/219949047-Installing-older-versions-of-packages).
+
+## Questions and Operationalizations
+
+In The Civic Elite, I use interlocking directorates among nonprofit organizations to evaluate the following four questions about power in civil society in Cleveland, and Austin:
+
+1. Has a civic elite consolidated? 
+
+And--
+
+2. Is this civic elite hierarchical?
+3. Are the organizations at the center of the civic elite "technocratic" organizations?
+4. Is there hegemony among the elite? Or is the elite pluralistically divided among multiple clusters?
+
+Based on prior theory, I define elite consolidation as occurring in civil society the following way:
+
+"*Elite consolidation* in the civic sector occurs when civic leaders—the directors and executive officers of community organizations—tend to increasingly cultivate close relationships with one another, creating an integrated network of partnerships, affiliations, and referrals that constitutes participating civic leaders as an elite (Lee et al., 2015; Levine, 2016; Marwell, 2004; McQuarrie, 2013; Pacewicz, 2015, 2016; Skocpol, 2013; Skocpol and Fiorina, 2004)." (Messamore 2021: 147)
+
+This definition allows me to apply the following network measures of interlocking directorate networks as empirical tests for each question:
+
+1. Elite Consolidation: The Main Component of the Networks (a large and growing main component of the networks indicates the existence of a civic elite)
+2. Hierarchy: The Rich-Club Coefficient (Zhou and Mondragon 2004)
+3. Technocracy: Louvain Community Detection of Main Component (identifying communities of elites), PageRank power centrality (to rank communities), and Degree Centrality (to identify most interlocked organizations in highest ranked community)
+4. Hegemony/Pluralism: The Gini Coefficient of PageRank among the communities of the main component. 
+
+### Preparation, Necessary Packages and iGraph vs. Statnet 
+
+This analysis relies heavily on the following packages: 
+
+* statnet: a suite of packages for network analysis in R built around sna
+* tnsa: a set of packages built on sna/statnet for dealing with temporal network objects
+* igraph: a suite of packages for network analysis, similar to statnet, but with alternative functionality and logics
+* brainGraph: a suite of packages built upon igraph with native functionality for calculating the rich-club coefficient
+
+Both statnet and igraph will be used in this tutorial because they offer different advantages. I find that it is easier to work with longitudinal network objects in statnet, for example, but igraph makes it easier to implement community detection and PageRank. It is important to note though that, due to histories of their development, statnet and igraph often conflict with one another. So, I will first use sna to manipulate the temporal network objects and conduct the basic descriptive analyses. Then, I will detach statnet and load igraph to conduct the analyses that are easier ingraph. 
+
+Also: it is important to **set a seed**, as the Rich-Club Coefficient relies on randomization so this starting number needs to be consistent for those results to reproducible.
+
+The following following packages are also necessary and are useful for this file:
+
+* tidyverse: for data manipulation and management
+* ggpubr: for producing graphs
+* writexl: for exporting to excel
+* reldist: for some useful helpful functions (like Gini calculation)
+
+
+```{r}
+rm(list=ls())
+library(tidyverse) # Data Management
+library(statnet) # SNA and related suites
+library(tsna) # Tools for Temporal Social Network Analysis
+library(reldist) # For the Gini Coefficient
+library(writexl)
+library(kableExtra) # for pretty markdowntables in this document
+library(ggpubr)
+set.seed(12345)
+```
+
+## Loading the Data 
+
+The data for Austin (constructed in the previous file) is stored as two RData cans that contain the workspaces for Austin from 1998-2003 and Austin from 2013-2016. Within each workspace is a dynamicNetwork object, which are tnsa longitudinal network objects that contain the respective networks for each year in each time period. We first load in these objects and clean everything else out. It is important to note that these are *undirected* networks. 
+
+```{r}
+########
+
+
+
+setwd('/Users/Wolfalev/Documents/Grad/UT-AUSTIN GRAD/Articles and Projects/4. Nonprofit Interlock/GitHub/DATA/')
+
+load("Austin_1990s.RData") # Load 1990s
+Austin1990s <- dynamicNetwork
+rm(list=ls()[-1])
+
+load("Austin_2010s.RData")
+Austin2010s <- dynamicNetwork
+rm(list=ls()[-c(1,2)])
+
+```
+
+You can inspect these network objects and their characteristics to learn how to use them
+
+```{r}
+Austin1990s #1495 orgs
+Austin2010s #2081 orgs
+
+```
+
+## Descriptive Network Statistics: Main Component and Other Features
+
+In order to obtain statistics that describe the network in each year, we will need to extract the individual network objects from the temporal network object. Then, we are going to write a loop that will calculate the network statistics on each network in each year. 
+
+```{r}
+
+network_1998 <- network.extract(Austin1990s, at=1998) #IDs change in extraction
+network_1999 <- network.extract(Austin1990s, at=1999) 
+network_2000 <- network.extract(Austin1990s, at=2000) 
+network_2001 <- network.extract(Austin1990s, at=2001) 
+network_2002 <- network.extract(Austin1990s, at=2002) 
+network_2003 <- network.extract(Austin1990s, at=2003) 
+#
+network_2013 <- network.extract(Austin2010s, at=2013)
+network_2014 <- network.extract(Austin2010s, at=2014)
+network_2015 <- network.extract(Austin2010s, at=2015)
+network_2016 <- network.extract(Austin2010s, at=2016)
+
+net_list <- list(network_1998,network_1999, network_2000,
+                 network_2001,network_2002,network_2003, network_2013,
+                 network_2014,network_2015, network_2016)
+
+```
+
+I then wrote a loop to extract the network statistics of interest. The most critical piece of information was the number of organizations in the main component. In this case, the main component is the largest group of organizations that can all reach one another through an unbroken chain of edges. I also extract information on the number of isolates, number of components, mean degree, and mean geodesic of the main component. Degree refers the number of interlocks held by an organization. Geodesics, meanwhile, are the shortest path between any two organizations as defined by the number of interlocks it takes an organization to reach another organization through the interlock network. 
+
+After constructing these tables, I then exported them, determined the proportion in the main component, and combined them with the data for Cleveland and prepared for the manuscript. 
+
+```{r}
+## Construct Vectors to store the information
+N = vector()
+Mean_Dg = vector()
+Pro_Isolates = vector()
+Size_main_component = vector()
+Mean_Geodesic = vector()
+Components= vector()
+
+for (i in net_list){
+  N = append(N, length(i$val)) #retrieve the number of organizations from the val object
+  Mean_Dg = append(Mean_Dg, mean(degree(i, gmode="graph"))) #retrieve the mean degree in the undirected graph
+  Pro_Isolates = append(Pro_Isolates, length(isolates(i))/length(i$val)) #retrieve the proportion of isolates
+  i_main <- component.largest(i, connected = "weak") #identify the main component
+  set.vertex.attribute(i, "i_main", i_main) #set main component membership as an organizational attribute
+  i_main_graph<-get.inducedSubgraph(i,v=which (i %v% 'i_main'==TRUE)) #extract the main component
+  Size_main_component <- append(Size_main_component, length(i_main_graph$val)) #identify the size of the main component
+  Mean_Geodesic = append(Mean_Geodesic, mean(geodist(i_main_graph)$gdist)) #obtain the mean geodesic
+  degree <- degree(i) # get the degree of all organizations
+  set.vertex.attribute(i, "degree", degree) #set this as an attribute
+  i_noisolates <- get.inducedSubgraph(i, v= which(i %v% "degree" >0) ) #extract networks that eliminate the isolates
+  Components = append(Components, components(i_noisolates)) #count the number of non-isolate components
+}
+
+one_mode_time <- cbind(N, Mean_Dg, Pro_Isolates, Size_main_component, Mean_Geodesic, Components)
+write.csv(one_mode_time, "one_mode_time_austin.csv")
+
+#pull out 2016 ntee for illustrative purposes for when we switch to igraph
+names_later <- get.vertex.attribute(network_2016, "vertex.names")
+ntee <- get.vertex.attribute(network_2016, "ntee")
+
+ntee_codes <- as.data.frame(cbind(names_later, ntee))
+
+```
+
+From here, we get the basic information we need to address the first research question: it appears that the main component is becoming proportionally larger, which suggests elite consolidation is occurring in the civic sector. 
+
+```{r}
+
+one_mode_time <- as.data.frame(one_mode_time) %>% 
+  mutate(Prop_Main_Component = Size_main_component/N) %>% kbl() %>%   kable_minimal()
+
+one_mode_time
+
+```
+
+## Hierarchy, Technocracy and Hegemony/Pluralism
+
+At this point, we are going to have to move from statnet world to igraph world because its easier to implement the Rich-Club Coefficient and Community Detection in iGraph. 
+```{r}
+
+detach("package:statnet") ## very important to sytemmatically detach anything connected to statnet before swtiching to igraph
+detach("package:sna")
+detach("package:tsna")
+detach("package:tergm")
+detach("package:ergm.count")
+detach("package:ergm")
+detach("package:statnet.common")
+detach("package:networkDynamic")
+detach("package:network")
+
+
+library(brainGraph) #loads igraph by default
+
+graph_1998 <- graph.adjacency(network_1998[,], mode="undirected") #here we are extracting the adjacency matricies that we are going to study in the following analyses
+graph_2003 <- graph.adjacency(network_2003[,], mode="undirected")
+graph_2013 <- graph.adjacency(network_2013[,], mode="undirected")
+graph_2016 <- graph.adjacency(network_2016[,], mode="undirected")
+
+#storing ntee for descriptives later
+graph_2016 <- set_vertex_attr(graph_2016, "ntee", value = ntee_codes$ntee)
+
+
+```
+
+
+### Hierarchy: The Rich Club Coefficient 
+
+In this study, I use the rich-club coefficient of the CBO-by-CBO networks as an index of hierarchy (Zhou and Mondragon 2004). The rich-club coefficient of a graph is an index of the propensity of nodes at degree k to connect with other nodes of degree equal to or greater than k normalized over the number of ties that could occur among nodes with degree equal to or greater than k in a complete graph, for all degree k. The advantage of the rich-club coefficient is that it allows a direct assessment of the tendency for well-connected organizations to interlock over time through comparison of the coefficient slopes in each network. If the slopes of the coefficients are stable between 1998 and 2016, it indicates that the inequality in interlocks among CBOs has not changed over time. If the slopes rise over time, meanwhile, it indicates increasing hierarchy and insularity of ties within the network.
+
+At every level of k, I again normalize this index over a the mean of rich-club coefficients generated from 1000 random graphs with the same degree distribution. This is to account for the fact that in certain degree distributions it becomes it becomes impossible to avoid connecting high degree hubs.
+
+The calculation of the rich-club coefficient is computationally intensive due to construction of the randomized networks. Be sure you have the time to perform the next step. 
+ 
+```{r}
+
+###Rich Club Tendencies
+
+rc1998 <- rich_club_norm(graph_1998, N=1000) 
+rc2003 <- rich_club_norm(graph_2003, N=1000)
+rc2013 <- rich_club_norm(graph_2013, N=1000)
+rc2016 <- rich_club_norm(graph_2016, N=1000)
+
+#Extracting the RC Coefficients for their Trendlines
+trendline1998 <- rc1998 %>% select(k, norm) %>% dplyr::mutate(trend=1998)
+trendline2003 <- rc2003 %>% select(k, norm) %>% dplyr::mutate(trend=2003)
+trendline2013 <- rc2013 %>% select(k, norm) %>% dplyr::mutate(trend=2013)
+trendline2016 <- rc2016 %>% select(k, norm) %>% dplyr::mutate(trend=2016)
+
+#Joining this Information Together in a Single Table
+k <- as.data.frame(c(1:50)) %>% rename(k=`c(1:50)`)
+richtrends1998 <-  left_join(k,trendline1998, by = "k")
+richtrends2003 <-  left_join(k, trendline2003, by = "k")
+richtrends2013 <-  left_join(k, trendline2013, by = "k")
+richtrends2016 <-  left_join(k, trendline2016, by = "k")
+
+# Binding it Together and Deleting Irrelvant Rows Where No Observations
+richtrends <- rbind(richtrends1998, richtrends2003, richtrends2013, richtrends2016) 
+richtrends <- richtrends %>% mutate(norm =na_if(norm, "NaN")) %>% mutate(trend= as.factor(trend)) %>% na.omit() 
+
+write_xlsx(richtrends, "austinrichtrends.xlsx")
+
+#Constructing the Plot that Ultimately Goes into the Paper
+rcplot <- ggplot(data=richtrends, aes(x=k, y=norm, linetype=trend))+
+  geom_line()+
+  scale_y_continuous(limits = c(0, 3.5))+
+  scale_linetype(name="Year")+
+  xlab("kcore") + ylab("Rich-Club Coefficient")+
+  geom_hline(aes(yintercept=1))+
+  theme_bw()
+
+
+ggexport(rcplot, filename = "rcplot_austin.pdf", height= 5, width = 7)
+
+rcplot
+
+```
+
+Here, through the comparison of the coefficient slopes, we find evidence of rising hierarchy in the network over time. 
+
+
+### Technocracy & Hegemony: Community Detection, PageRank, Degree, and Gini 
+
+In order to understand the questions of technocracy and hegemony/pluralism, it was necessary to implement a form of community detection on the main component. I opted to use Louvain, following Ma and DeDeo (2018) and Heemskerk and Takes (2016). 
+
+Louvain network community detection groups nodes into communities which maximize their modularity, Q, the fraction of edges within a community minus the fraction of edges expected to occur in that community expected at random in a degree preserving model. As modularity approaches one, it indicates that a community is highly inter-connected. 
+#### Implementing Louvain Community Detection 
+```{r}
+
+
+#Restrict to main component
+cl1998 <- clusters(graph_1998)
+graph_1998 <- induced_subgraph(graph_1998,which(cl1998$membership == which.max(cl1998$csize)))
+cl2003 <- clusters(graph_2003)
+graph_2003 <- induced_subgraph(graph_2003,which(cl2003$membership == which.max(cl2003$csize)))
+cl2013 <- clusters(graph_2013)
+graph_2013 <- induced_subgraph(graph_2013,which(cl2013$membership == which.max(cl2013$csize)))
+cl2016 <- clusters(graph_2016)
+graph_2016 <- induced_subgraph(graph_2016,which(cl2016$membership == which.max(cl2016$csize)))
+
+###Clustering of Main Compoennt  ### These also produce measures of modulairty in the networks, as well as the number of community
+clusters1998 <- cluster_louvain(graph_1998, weights = NULL) #0.54 # 12 
+clusters2003 <- cluster_louvain(graph_2003, weights = NULL) #0.52 # 15 
+clusters2013 <- cluster_louvain(graph_2013, weights = NULL) #0.66 # 20
+clusters2016 <- cluster_louvain(graph_2016, weights = NULL) #0.69 # 22
+
+#Grabbing Degree to Store as an attribute in these networks. We will look at this later.  
+dg1998 <- degree(graph_1998)
+graph_1998 <- graph_1998 %>%  set_vertex_attr("degree", value = as.numeric(dg1998))
+dg2003 <- degree(graph_2003)
+graph_2003 <- graph_2003 %>%  set_vertex_attr("degree", value = as.numeric(dg2003))
+dg2013 <- degree(graph_2013)
+graph_2013 <- graph_2013 %>%  set_vertex_attr("degree", value = as.numeric(dg2013))
+dg2016 <- degree(graph_2016)
+graph_2016 <- graph_2016 %>%  set_vertex_attr("degree", value = as.numeric(dg2016))
+
+```
+
+
+#### Comparing Elite Communities and Evaluating Hegemony/Pluralism 
+
+Once community detection is implemented, it is then possible to interpolate organizations into single nodes representing their community membership. This is done through the contract() function, relying on the cluster membership attribute. Vertex attributes, for the sake of combined, are combined at their mean. However, this throws some errors since the 2016 network has categorical data on NTEE code. In this exercise we are just careful to ignore this byproduct of the contraction and ignore this value. Edge attributes, the focus of this analysis, are unchanged, which permits the PageRank analysis. In other words, all ties between organizations in different clusters are interpolated into multiple ties between single nodes representing each cluster. 
+
+
+```{r}
+
+# Getting the Size of Each Community. This is how we determine which community number refers to the largest community and we use this later in the analysis of the network "core". 
+size_2016 <- vector()
+for (i in igraph::groups(clusters2016)){
+  size_2016 <- append(size_2016,(length(i)))
+}
+nclus2016 <- as.numeric(length(size_2016))
+
+# Interpolating Organizations Into their Communities
+collapse_2016 <- contract(graph_2016, membership(clusters2016), vertex.attr.comb="mean")
+
+## Page Rank Among Elite Communities 
+pr2016 <- as.data.frame(page.rank(collapse_2016)$vector) *100
+pr2016_top <- pr2016 %>% arrange(desc(`page.rank(collapse_2016)$vector`)) %>% dplyr::slice(1:10)
+
+## Gini Coefficient of Page Rank Among Elite Communities
+gini(pr2016_top$`page.rank(collapse_2016)$vector`) # --- >> gini coefficient of 20 percent
+
+#Getting Mean Degree
+meandg2016 <- as.data.frame(get.vertex.attribute(collapse_2016, "degree"))
+
+
+# Saving Results for Export 
+core_2016 <- cbind(size_2016, meandg2016,pr2016 ) %>%
+  rename(`Size (Nodes)` =size_2016, `Average Degree` = `get.vertex.attribute(collapse_2016, "degree")`,
+         `Page Rank` = `page.rank(collapse_2016)$vector`) %>% arrange(desc(`Size (Nodes)`)) %>% slice(1:10)
+
+
+write_xlsx(core_2016, "austinranks.xlsx")
+
+core_2016 <- core_2016 %>% kbl() %>%   kable_minimal()
+
+
+core_2016
+```
+
+This figure provides us with the information necessary for evaluating hegemony/pluralism: the disttribution of PageRank among the top ten communities of the civic elite is fairly egalitarian. (20 percent here)
+
+####: Technocracy: Looking at the "Core" of the Civic Elite 
+
+For this final hypothesis, we need to take a look at the most central actors in the most central community. Given the communities constructed from the previous step, we can induce a subgraph from the largest community and then investigate who the most central actors based on degree.   
+
+```{r}
+
+## Create a SubGraph Of Only the Largest Community. I found this number in the size_2016 object
+elites <- induced_subgraph(graph_2016, membership(clusters2016)==22)
+
+#Get the table of the civic core
+elite_n <- get.vertex.attribute(elites, "name")
+elite_d <- get.vertex.attribute(elites, "degree")
+elite_ntee <- get.vertex.attribute(elites, "ntee")
+elite_table <- as.data.frame(cbind(elite_n, elite_d, elite_ntee)) %>% arrange(desc(as.numeric(elite_d))) %>% slice(1:15)
+
+write_xlsx(elite_table, "austincore.xlsx")
+
+elite_table <- elite_table %>% kbl() %>%   kable_minimal()
+
+
+elite_table
+```
+
+From here we get a look at the organizations most central in the network. These organizations look pretty close to the organizations found by Galaskiewicz (1979), suggesting persistent traditionalism. 
+
+## Final thoughts
+
+And thats it! Additional minor analyses are also available in the paper beyond the main ones done here. These use, for example, the Gini coefficient to examine the distribution of fields across clusters, as well as inspect particular communities. The tools for doing these analyses are available from the code above, so I'll leave it to you to construct these tables if you are so interested. If you have any questions about this work or the paper itself, feel free to reach out to me at: andrew.messamore@gmail.com
