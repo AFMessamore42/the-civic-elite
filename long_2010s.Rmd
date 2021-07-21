@@ -1,0 +1,202 @@
+---
+title: "Constructing the Longitudinal Network (2010s)"
+author: "Andrew Messamore"
+date: "7/20/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction
+
+In this [R Markdown](http://rmarkdown.rstudio.com) Notebook, I go through the steps of how to construct the longitudinal network object for Austin in the 2010s, used in [The Civic Elite](https://www.sciencedirect.com/science/article/pii/S0378873321000216?casa_token=15897H9VZq8AAAAA:rLqOJqDmJseK__EYMrPCc_r-uTmrz964F3a7WAxiygjLrIz2q-p_r7yTwuQUIzlZdnyyanoAQPzW). This replication file covers the analysis of the longitudinal Austin network (1998-2016) but the steps can be generalized to other cities.
+
+**This file is very similar -- but not identical-- to the file for building the dataset in the 1990s. Most importantly, it does not contain steps on attaching finanical information (not used here)**
+
+This file relies heavily on *tsna*, a package for manipulating longitudinal network objects. The end result will be longitudinal network objects for Austin that can be easily analyzed to study the temporal evolution of board interlock networks.
+
+This guide covers constructing "one-mode" interlock networks, as is utilized in The Civic Elite. However, it is important to note that it is also possible to construct two-mode bipartite networks using tsna networkDynamic objects. This functionality is not covered here. 
+
+The first thing we need to do is load in our packages and the edgelist constructed in the previous step.
+
+```{r, eval=FALSE}
+
+setwd('/Users/Wolfalev/Documents/Grad/UT-AUSTIN GRAD/Articles and Projects/4. Nonprofit Interlock/GitHub/DATA/')
+rm(list=ls())
+library("tidyverse") # Data Management
+library("statnet") # SNA and related suites
+library(tsna) # Tools for Temporal Social Network Analysis
+#library(ndtv) # Network Dynamic Temporal Visualizations
+library(DescTools)
+########
+
+#1. Load Data and Subset
+texas_filers <- read.csv("texas_filers_boards.csv") # 25K nonprofits that filed from 2013-2016
+```
+
+## First Steps: Getting to Austin and Generating a List of Organizations 
+
+The first thing we are going to do is filter our Texas data down to Austin. In the paper, I choose to look at all nonprofits enclosed in the county (Travis) enclosing the city. Next, we are going to construct a list of all unique organizations in Texas, based on EIN. This will be useful for constructing the network object: since this is a bipartite network, of organizations and directors, we need to have the organizational information to construct the network properly 
+
+Important to note: the networkDynamic objects that we are going to build will need unique IDs for each organization, so we are going to assign this ID at this step. 
+
+```{r, eval=FALSE}
+# This datafile should include all board members with attached data on that orgs year variables
+
+officers <- subset(texas_filers, subset = FIPS == 48453) #Filtering texas to Austin
+
+nodelist <- officers %>% 
+  dplyr::select(EIN, FISYR, TAXPAYER_NAME, NTEE1) %>%
+  group_by(FISYR) %>% 
+  filter(!duplicated(EIN)) %>%
+  arrange(EIN) %>% ungroup() %>%  mutate(ID= as.numeric(as.factor(EIN)))
+```
+
+#
+
+## Constructing Temporal Network Objects
+
+We now get into the hard part of taking our list of names and list of organizations with financial data, and turn it into an easily usable temporal network object for analysis. 
+
+### The Temporal Edgelist
+
+The first thing we need to do is to construct an edgelist (see [Analyzing Social Networks](https://us.sagepub.com/en-us/nam/analyzing-social-networks/book255068) for more info on the definitions)-which is at its simplest a two column dataframe that matches the nodes in our networks and indicates they will have a tie. This edgelist will turn the list of names of directors present at each organization into a dataframe that indicates when a tie occurs between two organizations. 
+
+Critically for longitudinal network analysis, this will be a *temporal edgelist* indicating not only that a tie occurred, but when the tie occurred, in order to create a temporal structure. Also, the edgelist will need unique IDs for EIN that match the IDs for organizations created in the last step. 
+
+One more detail: based on conversations with [Richard Benton](https://sociology.illinois.edu/directory/profile/rabenton), it seemed appropriate to reduce unnecessary information in the network in the case that I hoped to study the evolution of the network over time and wanted to reduce computation time. So, I filtered the list of directors down only to those that either:
+
+1. Served on multiple boards
+2. Served at least four years on the board
+
+This information is not particularly relevant for this project. But any study of bipartite networks may need to think carefully about structures like these. 
+
+```{r, eval=FALSE}
+
+## Creating a clean edgelist object and removing orgs that were isolates
+edgelist <- officers
+edgelist <- edgelist %>% select(EIN, FISYR, cleaned_name) %>%  #selecting edgelist items
+  rename(BOARDMEMBER = cleaned_name)
+head(edgelist)
+edgelist <- edgelist %>% filter(!is.na(BOARDMEMBER)) #remove "NA" orgs that didnt have board members
+
+#Creating a Counter for Years of service and interlock placement, and removing inelligble directors
+edgelist <- edgelist %>% group_by(EIN, BOARDMEMBER) %>% mutate(years_of_service = n()) %>% ungroup()
+edgelist <- edgelist %>% 
+  group_by(BOARDMEMBER) %>% 
+  mutate(served_at= length(unique(EIN))) %>% ungroup()
+edgelist <- edgelist %>% filter(served_at > 1 | years_of_service ==4)
+
+## Constructing the director to director edgelist
+edgelist <- left_join(edgelist, edgelist, by=c("FISYR","BOARDMEMBER")) # exact name matches in the same year for edge list
+edgelist <- edgelist %>% subset(EIN.x != EIN.y) %>% select(EIN.x,FISYR, EIN.y)  #removing self edges
+
+#Removing duplicate undirected edges
+edgelist_clean <- edgelist %>% 
+  apply(1L, sort) %>%              # sort dyads
+  t() %>%                          # transpose resulting matrix to get the original shape back
+  unique() %>%                     # get the unique rows
+  as.data.frame() %>%              # back to data frame
+  setNames(c("FISYR", "EIN.x", "EIN.y"))
+
+# Inducing the Temporal Structure Into the Network 
+edgelist <- edgelist_clean %>%
+  rename(head =EIN.x, tail=EIN.y, onset=FISYR) %>%
+  mutate(terminus = onset+1) %>% 
+  mutate(duration = 1) %>% 
+  mutate(edge.id = row_number())
+
+# Creating unique IDS for each EIN
+key <-nodelist %>% select(EIN, ID) %>% distinct(EIN, .keep_all=TRUE) #key for IDs from EIN
+key1 <- key %>% rename(head=EIN, ID_head=ID)
+key2 <- key %>% rename(tail=EIN, ID_tail=ID)
+
+# Joining these IDS to the edgelist 
+edgelist <- left_join(edgelist, key1, by="head")
+edgelist <- left_join(edgelist, key2, by="tail")
+edgelist <- edgelist %>% select(-head, -tail) %>% rename(head=ID_head, tail=ID_tail)
+
+edgelist
+```
+
+
+### Bringing it all together: The Longitudinal Network Object
+
+Now, we can take our nodelist of organizations and our edgelist of interlocking directorates and construct a longitudinal network object. More information about networkDynamic objects can be found [here](https://cran.r-project.org/web/packages/networkDynamic/vignettes/networkDynamic.pdf).
+
+The basic steps are the following:
+
+1. Format the nodelist
+2. Format the edgelist (also indicating that in this case no information about time was censored)
+3. Initialize a network object with as many nodes as there are organizations
+4. Join the nodelist (with time varying covariates) and edgelist to this empty network object to create the networkDynamic object
+5. Check the networkDynamic object to see it looks good
+6. Add any time invairiant attributes to the organizations in the network at the end: name of organization and ntee code
+
+```{r, eval=FALSE}
+
+#4. Construct Temporal Network 
+# Using Network Dynamic objects
+
+#creating "spells" of presence within the network for verticies (this is where I would include stats)
+#nodelist formatting 
+nodelist <-  nodelist %>% select(-EIN) %>% rename(EIN=ID)
+nodelist <- nodelist %>% 
+  rename(onset=FISYR) %>% 
+  mutate(terminus=onset+1) %>% 
+  rename(vertex.id = EIN) %>% 
+  mutate(vertex.id =as.integer(vertex.id)) %>% 
+  select(onset, terminus, vertex.id, TAXPAYER_NAME, NTEE1) %>% as.data.frame()
+
+#edgelist formatting 
+edgelist <- edgelist %>% 
+  mutate(onset.censored=FALSE, terminus.censored = FALSE) %>% 
+  select(onset, terminus,tail, head,onset.censored,terminus.censored, duration, edge.id) %>% as.data.frame()
+
+
+#specify initial base.net
+net <- network.initialize(
+  length(unique(nodelist$vertex.id)),
+  directed = FALSE,
+  hyper = FALSE,
+  loops = FALSE,
+  multiple = FALSE
+)
+
+#initialize network
+dynamicNetwork <- networkDynamic(
+  net,
+  edge.spells = edgelist,
+  vertex.spells = nodelist, 
+  directed=FALSE,
+)
+
+# Checks
+network.dynamic.check(dynamicNetwork) # All Good?
+dynamic_output <- as.data.frame(dynamicNetwork) #Edgelist correct?
+
+
+list.vertex.attributes(dynamicNetwork)
+
+names <- nodelist %>% #for names
+  distinct(vertex.id, .keep_all = TRUE) %>% select(TAXPAYER_NAME)
+names <- names$TAXPAYER_NAME
+
+ntee <- nodelist %>% #for names
+  distinct(vertex.id, .keep_all = TRUE) %>% select(NTEE1)
+ntee <- ntee$NTEE1
+
+set.vertex.attribute(dynamicNetwork, "vertex.names", names)
+set.vertex.attribute(dynamicNetwork, "ntee", ntee)
+```
+
+
+Now, you are done and the network can be saved!
+
+```{r, eval=FALSE}
+save.image('~/Users/Wolfalev/Documents/Grad/UT-AUSTIN GRAD/Articles and Projects/4. Nonprofit Interlock/GitHub/DATA/')
+
+```
+

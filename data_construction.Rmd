@@ -1,0 +1,202 @@
+---
+title: "Constructing the Board Network Datasets"
+author: "Andrew Messamore"
+date: "7/20/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction
+
+In this [R Markdown](http://rmarkdown.rstudio.com) Notebook, I provide the code of how to construct the board edgelists used in [The Civic Elite](https://www.sciencedirect.com/science/article/pii/S0378873321000216?casa_token=15897H9VZq8AAAAA:rLqOJqDmJseK__EYMrPCc_r-uTmrz964F3a7WAxiygjLrIz2q-p_r7yTwuQUIzlZdnyyanoAQPzW). This replication file covers the analysis of the longitudinal Austin network (1998-2016) but the steps can be generalized to other cities. We will first construct the data for the recent time period, from AWS, and then move to the earlier time period. 
+
+The end result of this analysis will be the construction of a dataset of Form 990/Form 990 EZ nonprofits in Texas from which longitudinal networks of interlocking directorates can be constructed. 
+
+**Please note**: Because these the raw data files are very large, the file is only provided for reference. The data itself can be found [here](https://www.dropbox.com/sh/w0pwr8634ysyl9c/AAAmixHB9HxMuqUzgd4bCdFJa?dl=0)
+
+```{r, include=FALSE}
+
+rm(list=ls())
+library("tidyverse")
+library("statnet")
+library( peopleparser ) # a function produced by the Nonprofit Open Data Collective, available here: https://nonprofit-open-data-collective.github.io/people-parser/
+
+```
+
+## 2010s 
+
+### Initial Loading and Cleaning
+
+In order to construct board networks from 2010 on, we need data from Amazon Web Services that contains the board information from Forms 990/Forms 990EZ filers across the United States from 2010 to 2017. We will then need to match this board data to a set of all active nonprofits in Texas between 2013 and 2016 to a subset of organizations. 
+
+Both of these data files can be accessed with some work AWS via [IRSx](http://www.irsx.info/metadata/forms.html). There, you can find guides for how to constructing the appropriate information. A special shout out to [Jesse Lecy](https://publicservice.asu.edu/content/jesse-lecy) was also very kind in providing me with the board information from AWS.
+
+
+```{r, eval=FALSE}
+
+setwd('/Users/Wolfalev/Documents/Grad/UT-AUSTIN GRAD/Articles and Projects/4. Nonprofit Interlock/GitHub/DATA/')
+board_data <- readRDS("FULL-PART-VII-TABLE-01.rds") #Board Data from AWS 
+texas_filers <- read.csv("texas_efilers.csv", numerals = "no.loss") #Records of Texas E-Filers
+
+# We are then only going to select the variables we need from the board data and match names and variable types for linking
+officers <- board_data %>% select(EIN, NAME, TAXYR, FORMTYPE, F9_07_PZ_DTK_NAME, F9_07_PZ_DTK_TITLE)
+officers <- officers %>% filter(TAXYR > 2012 & TAXYR < 2017)
+officers <- officers %>% rename(FISYR= TAXYR)
+
+texas_filers <- texas_filers %>% mutate(EIN = as.character(EIN))
+officers <- officers %>% mutate(FISYR = as.numeric(FISYR))
+
+```
+
+Join the Filers. 
+
+```{r, eval=FALSE}
+texas_filers <- left_join(texas_filers, officers, by = c("EIN", "FISYR"))
+
+# Drop Private Foundations
+
+texas_filers <- texas_filers %>% filter(RETURN_TYPE != "990PF")
+```
+
+### Name Cleaning And Save
+
+The names need to be cleaned before you use them for matching, removing items such as honorifics, suffixes, and salutations, etc. Jesse Lecy has developed [peopleparser](https://nonprofit-open-data-collective.github.io/people-parser/) for this task. This is very computationally intensive for a board list of this size, so I am going to show the code, but I after the producing it the first time I actually load in an already cleaned dataset. 
+
+```{r, eval=FALSE}
+
+setwd('/Users/Wolfalev/Documents/Grad/UT-AUSTIN GRAD/Articles and Projects/4. Nonprofit Interlock/GitHub/DATA/')
+
+texas_filers$F9_07_PZ_DTK_NAME <- tolower(texas_filers$F9_07_PZ_DTK_NAME) # going lower case
+
+# parsed_names <- parse.names(texas_filers$F9_07_PZ_DTK_NAME) # write this and load it to use in the future
+# write.csv(census.names, "census.names.csv")
+# write.csv(parsed_names, "parsednames.csv")
+## run this below
+parsed_names <- read.csv("parsednames.csv")
+texas_filers <- cbind(parsed_names, texas_filers)
+
+```
+
+We now do a little cleaning up to create single names for matching and save the dataset. An important part of this step is to eliminate multiple records of the same person at any given organization, since a single person may serve on multiple roles but you dont necessary want to inflate their representation. I delete duplicate records of indvididuals with the same name in the same organization in the same year. 
+
+```{r, eval=FALSE}
+
+setwd('/Users/Wolfalev/Documents/Grad/UT-AUSTIN GRAD/Articles and Projects/4. Nonprofit Interlock/GitHub/DATA/')
+
+#single name
+texas_filers$cleaned_name = paste0(texas_filers$first_name, texas_filers$last_name)
+#recode NA back to NA
+texas_filers$cleaned_name <- na_if(texas_filers$cleaned_name, "NA")
+
+texas_filers <- texas_filers[,2:33]
+
+#remove any duplicate mentions of a director in an organization in a given year. We dont need that information. 
+texas_filers$record_indicator=paste0(texas_filers$cleaned_name, texas_filers$EIN, texas_filers$FISYR)
+texas_filers <- texas_filers %>% 
+  distinct(record_indicator, .keep_all = TRUE)
+
+### For the sake of storing data on GitHub I am going to reduce the size of this dataset here. 
+texas_filers <- subset(texas_filers, subset = FIPS == 48453)
+
+write.csv(texas_filers, "texas_filers_boards.csv")
+```
+
+
+## 1990s
+
+### Initial Loading and Cleaning
+
+The steps for constructing the edgelists in the 1990s are a little different: they come from the Urban Institutes historical "Digitized Data" from 1998-2003.  Here, we will need to load two files available from the Urban Institute. 
+
+1. The Revenues and Expenses from the Business Master File (for organizational data)
+2. The Officers file, which contains information on board members. 
+
+This data can all be downloaded here: [Urban Institute](https://nccs-data.urban.org/index.php)
+
+```{r, eval=FALSE}
+
+rm(list=ls())
+
+setwd('/Users/Wolfalev/Documents/Grad/UT-AUSTIN GRAD/Articles and Projects/4. Nonprofit Interlock/GitHub/DATA/')
+
+load('/Users/Wolfalev/Documents/Grad/UT-AUSTIN GRAD/Articles and Projects/4. Nonprofit Interlock/GitHub/DATA/BMF_RevExp_Loaded.RData')
+load('/Users/Wolfalev/Documents/Grad/UT-AUSTIN GRAD/Articles and Projects/4. Nonprofit Interlock/GitHub/DATA/Officers_Loaded.RData')
+
+
+```
+
+We need to join the BMF Revenues and Expenses File, and the Officers file to get the board information we want here. First a little subsetting and checking. 
+
+```{r, eval=FALSE}
+
+# Reduce the officers data
+officers <- officers %>% select(EIN, NAME, FISYR,  P5NAME, P5TTL)
+
+#check revexp make sure orgs are unique filings
+revexp <- revexp %>% 
+  group_by(EIN) %>% 
+  mutate(count=n()) 
+table(revexp$count) #at most 6, which means these are all unique
+
+#subset the revenues expenses file to texas, as we are going to use it for matching 
+revexp <- revexp %>% subset(STATE=='TX')
+
+# Now we have what looks to be four years of board data from 2013-2016
+```
+
+
+Now we start joining files to create a proper edgelist. 
+
+```{r, eval=FALSE}
+filers <- left_join(revexp, officers, by = c("EIN", "FISYR"))
+# change "" to NA on names
+filers$P5NAME[filers$P5NAME==""] <- NA
+
+table(is.na(filers$P5NAME))
+table(is.na(filers$P5NAME), filers$FORMTYPE) # No PF in this data set
+```
+
+### Name Cleaning and Save 
+
+Finally, we do the name cleaning. As before, we are going to technically skip this because its so time intensive. 
+
+```{r, eval=FALSE}
+
+setwd('/Users/Wolfalev/Documents/Grad/UT-AUSTIN GRAD/Articles and Projects/4. Nonprofit Interlock/GitHub/DATA/')
+
+filers$P5NAME <- tolower(filers$P5NAME) #converting to lower
+filers <- filers %>% ungroup()
+# parsed_names <- parse.names(filers$P5NAME) # write this and load it to use in the future
+# write.csv(census.names, "census.names_1990s.csv")
+# write.csv(parsed_names, "parsednames_1990s.csv")
+# run this below
+parsed_names <- read.csv("parsednames_1990s.csv")
+filers <- cbind(parsed_names, filers)
+```
+
+At this point all we need to do is save the dataset. 
+
+```{r, eval=FALSE}
+#single name
+filers$cleaned_name = paste0(filers$first_name, filers$last_name)
+#recode NA back to NA
+filers$cleaned_name <- na_if(filers$cleaned_name, "NA")
+
+#remove any duplicate mentions of a director in an organization in a given year
+filers$record_indicator=paste0(filers$cleaned_name, filers$EIN, filers$FISYR)
+filers <- filers %>% 
+  distinct(record_indicator, .keep_all = TRUE)
+
+
+### For the sake of storing data on GitHub I am going to reduce the size of this dataset here. 
+
+filers <- subset(filers, subset = FIPS == 48453)
+
+setwd('/Users/Wolfalev/Documents/Grad/UT-AUSTIN GRAD/Articles and Projects/4. Nonprofit Interlock/GitHub/DATA/')
+write.csv(filers, "filers_boards_1990s.csv")
+
+```
+

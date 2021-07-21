@@ -1,0 +1,17 @@
+name: "Mywebsite"
+title: "The Civic Elite"
+type: inverse
+left:
+  - text: "Replication Steps"
+    menu:
+       - text: "Building the Datasets"
+         href: ./data_construction.html
+       - text: "Austin Network - 1990s"
+         href: ./long_1990s.html
+       - text: "Austin Network - 2010s"
+         href: ./long_2010s.html
+       - text: "Analyzing the Civic Elite in Austin"
+         href: ./Civic_Elite.html
+right:
+  - icon: fa-github fa-lg
+    href: https://github.com/AFMessamore42/the-civic-elite
