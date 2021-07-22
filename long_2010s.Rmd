@@ -23,7 +23,6 @@ The first thing we need to do is load in our packages and the edgelist construct
 
 ```{r, eval=FALSE}
 
-setwd('/Users/Wolfalev/Documents/Grad/UT-AUSTIN GRAD/Articles and Projects/4. Nonprofit Interlock/GitHub/DATA/')
 rm(list=ls())
 library("tidyverse") # Data Management
 library("statnet") # SNA and related suites
@@ -33,7 +32,8 @@ library(DescTools)
 ########
 
 #1. Load Data and Subset
-texas_filers <- read.csv("texas_filers_boards.csv") # 25K nonprofits that filed from 2013-2016
+URL <- "https://github.com/AFMessamore42/the-civic-elite/raw/main/data/texas_filers_boards.csv"
+texas_filers <- read.csv( URL )
 ```
 
 ## First Steps: Getting to Austin and Generating a List of Organizations 
@@ -196,7 +196,7 @@ set.vertex.attribute(dynamicNetwork, "ntee", ntee)
 Now, you are done and the network can be saved!
 
 ```{r, eval=FALSE}
-save.image('~/Users/Wolfalev/Documents/Grad/UT-AUSTIN GRAD/Articles and Projects/4. Nonprofit Interlock/GitHub/DATA/')
+save.image('Austin_2010s.RData')
 
 ```
 

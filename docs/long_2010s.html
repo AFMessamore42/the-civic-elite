@@ -460,17 +460,17 @@ div.tocify {
 <p>This file relies heavily on <em>tsna</em>, a package for manipulating longitudinal network objects. The end result will be longitudinal network objects for Austin that can be easily analyzed to study the temporal evolution of board interlock networks.</p>
 <p>This guide covers constructing “one-mode” interlock networks, as is utilized in The Civic Elite. However, it is important to note that it is also possible to construct two-mode bipartite networks using tsna networkDynamic objects. This functionality is not covered here.</p>
 <p>The first thing we need to do is load in our packages and the edgelist constructed in the previous step.</p>
-<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">setwd</span>(<span class="st">&#39;/Users/Wolfalev/Documents/Grad/UT-AUSTIN GRAD/Articles and Projects/4. Nonprofit Interlock/GitHub/DATA/&#39;</span>)</span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">rm</span>(<span class="at">list=</span><span class="fu">ls</span>())</span>
-<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(<span class="st">&quot;tidyverse&quot;</span>) <span class="co"># Data Management</span></span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(<span class="st">&quot;statnet&quot;</span>) <span class="co"># SNA and related suites</span></span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tsna) <span class="co"># Tools for Temporal Social Network Analysis</span></span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="co">#library(ndtv) # Network Dynamic Temporal Visualizations</span></span>
-<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(DescTools)</span>
-<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="do">########</span></span>
-<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a><span class="co">#1. Load Data and Subset</span></span>
-<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>texas_filers <span class="ot">&lt;-</span> <span class="fu">read.csv</span>(<span class="st">&quot;texas_filers_boards.csv&quot;</span>) <span class="co"># 25K nonprofits that filed from 2013-2016</span></span></code></pre></div>
+<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">rm</span>(<span class="at">list=</span><span class="fu">ls</span>())</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(<span class="st">&quot;tidyverse&quot;</span>) <span class="co"># Data Management</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(<span class="st">&quot;statnet&quot;</span>) <span class="co"># SNA and related suites</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tsna) <span class="co"># Tools for Temporal Social Network Analysis</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="co">#library(ndtv) # Network Dynamic Temporal Visualizations</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(DescTools)</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="do">########</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="co">#1. Load Data and Subset</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>URL <span class="ot">&lt;-</span> <span class="st">&quot;https://github.com/AFMessamore42/the-civic-elite/raw/main/data/texas_filers_boards.csv&quot;</span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>texas_filers <span class="ot">&lt;-</span> <span class="fu">read.csv</span>( URL )</span></code></pre></div>
 <div id="first-steps-getting-to-austin-and-generating-a-list-of-organizations" class="section level2">
 <h2>First Steps: Getting to Austin and Generating a List of Organizations</h2>
 <p>The first thing we are going to do is filter our Texas data down to Austin. In the paper, I choose to look at all nonprofits enclosed in the county (Travis) enclosing the city. Next, we are going to construct a list of all unique organizations in Texas, based on EIN. This will be useful for constructing the network object: since this is a bipartite network, of organizations and directors, we need to have the organizational information to construct the network properly</p>
@@ -612,7 +612,7 @@ div.tocify {
 <span id="cb4-52"><a href="#cb4-52" aria-hidden="true" tabindex="-1"></a><span class="fu">set.vertex.attribute</span>(dynamicNetwork, <span class="st">&quot;vertex.names&quot;</span>, names)</span>
 <span id="cb4-53"><a href="#cb4-53" aria-hidden="true" tabindex="-1"></a><span class="fu">set.vertex.attribute</span>(dynamicNetwork, <span class="st">&quot;ntee&quot;</span>, ntee)</span></code></pre></div>
 <p>Now, you are done and the network can be saved!</p>
-<div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="fu">save.image</span>(<span class="st">&#39;~/Users/Wolfalev/Documents/Grad/UT-AUSTIN GRAD/Articles and Projects/4. Nonprofit Interlock/GitHub/DATA/&#39;</span>)</span></code></pre></div>
+<div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="fu">save.image</span>(<span class="st">&#39;Austin_2010s.RData&#39;</span>)</span></code></pre></div>
 </div>
 </div>
 </div>

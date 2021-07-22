@@ -85,20 +85,19 @@ The data for Austin (constructed in the previous file) is stored as two RData ca
 ########
 
 
-
-setwd('/Users/Wolfalev/Documents/Grad/UT-AUSTIN GRAD/Articles and Projects/4. Nonprofit Interlock/GitHub/DATA/')
-
-load("Austin_1990s.RData") # Load 1990s
+githubURL <- "https://github.com/AFMessamore42/the-civic-elite/raw/main/data/Austin_1990s.RData"
+load(url(githubURL)) # Load 1990s
 Austin1990s <- dynamicNetwork
 rm(list=ls()[-1])
 
-load("Austin_2010s.RData")
+githubURL <- "https://github.com/AFMessamore42/the-civic-elite/raw/main/data/Austin_2010s.RData"
+load(url(githubURL)) # Load 2010s
 Austin2010s <- dynamicNetwork
 rm(list=ls()[-c(1,2)])
 
 ```
 
-You can inspect these network objects and their characteristics to learn how to use them
+You can inspect these network objects and their characteristics to learn how to use them.
 
 ```{r}
 Austin1990s #1495 orgs

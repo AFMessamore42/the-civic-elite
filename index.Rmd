@@ -9,9 +9,11 @@ Messamore, Andrew. “The Civic Elite: a Network Perspective on Elite Consolidat
 
 ### Replication Steps and Goal
 
-Please see the tabs above for the steps for replicating the data construction and network analysis for Austin, TX from *The Civic Elite*. The final analysis file can be also used to replicate results for Cleveland, OH if the data files are exchanged for the Cleveland data files [here](https://www.dropbox.com/sh/w0pwr8634ysyl9c/AAAmixHB9HxMuqUzgd4bCdFJa?dl=0). 
+Please see the tabs above for the steps for replicating the data construction and network analysis for Austin, TX from *The Civic Elite*. The 'Analyzing the Civic Elite in Austin' file can be also used to replicate results for Cleveland, OH if the data files are exchanged for the Cleveland data files [here](https://www.dropbox.com/sh/w0pwr8634ysyl9c/AAAmixHB9HxMuqUzgd4bCdFJa?dl=0). 
 
-This repo is also meant to be a tutorial for constructing similar results for any city in the United States. For the time period 1998-2003, this can be done immediately with the code and data provided so long as the code is properly modified. In order to apply these analyses to other cities from 2010 onward, though, you need to use [IRSx](http://www.irsx.info/metadata/forms.html) to construct a list of active filers in the the state and time period that you are interested in. IRSx provides helpful documentation for doing this. Once you have the active filer records, you can then match this data to the AWS board records provided on Dropbox. 
+This repo is also meant to be a tutorial and resource for constructing similar results for any city in the United States. For the time period 1998-2003, this can be done immediately with the code and data provided so long as the code is properly modified. For example, if you were interested in doing an analysis of Detroit, MI, all you would need to do is switch the state requested to 'MI' Michigan when constructing the data, and make sure you subset to the FIPS code of '26163' for Wayne County Michigan (at least if you are following my boundary specification strategy).
+
+In order to apply these analyses to other cities from 2010 onward, though, you need to use [IRSx](http://www.irsx.info/metadata/forms.html) to construct a list of active filers in the the state and time period that you are interested in. IRSx provides helpful documentation and tutorials for doing this. Once you have the active filer records, you can then match this data to the AWS board records provided on Dropbox. 
 
 ### Data 
 

@@ -23,7 +23,6 @@ The first thing we need to do is load in our packages and the edgelist construct
 
 ```{r, eval=FALSE}
 
-setwd('/Users/Wolfalev/Documents/Grad/UT-AUSTIN GRAD/Articles and Projects/4. Nonprofit Interlock/GitHub/DATA/')
 rm(list=ls())
 library("tidyverse") # Data Management
 library("statnet") # SNA and related suites
@@ -33,7 +32,8 @@ library(DescTools)
 ########
 
 #1. Load Data and Subset
-texas_filers <- read.csv("filers_boards_1990s.csv")
+URL <- "https://media.githubusercontent.com/media/AFMessamore42/the-civic-elite/main/data/filers_boards_1990s.csv"
+texas_filers <- read.csv( URL )
 ```
 
 ## First Steps: Getting to Austin and Generating a List of Organizations 
@@ -70,8 +70,9 @@ I used the IRS business master file to obtain additional information about the n
 ```{r, eval=FALSE}
 
 #founding date from BMF
-setwd('/Users/Wolfalev/Documents/Grad/UT-AUSTIN GRAD/Articles and Projects/4. Nonprofit Interlock/GitHub/DATA/')
-load("BMF_Loaded.RData")
+githubURL <- "https://github.com/AFMessamore42/the-civic-elite/raw/main/data/BMF_Loaded.RData"
+load(url(githubURL))
+
 age <- bmfofficers %>% select(EIN, RULEDATE)
 age$RULEDATE[age$RULEDATE ==0] <- NA
 age$RULEYR <- substr(age$RULEDATE, 0, 4)
@@ -275,6 +276,6 @@ set.vertex.attribute(dynamicNetwork, "ntee", ntee)
 Now, you are done and the network can be saved!
 
 ```{r, eval=FALSE}
-save.image("~/Users/Wolfalev/Documents/Grad/UT-AUSTIN GRAD/Articles and Projects/4. Nonprofit Interlock/GitHub/DATA/Austin_1990s.RData)
+save.image("Austin_1990s.RData)
 ```
 
